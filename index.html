@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Silberhochzeitsgrüße</title>
+  <style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Italiana&display=swap" rel="stylesheet">
+    
+    .italiana-regular {
+        font-family: "Italiana", sans-serif;
+        font-weight: 400;
+        font-style: normal;
+        }
+
+
+    body{
+      font-family: 'Italiana', serif;
+      background:#e9e7d9;
+      margin:0;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      padding:24px;
+    }
+
+    h1, h2 {
+        font-family: "Italiana", serif;
+        }
+
+    h1{margin:0;font-size:clamp(60px,4vw,32px);color: #496677;font-family: 'Italiana';}
+    p.subtitle{max-width:800px;text-align:center;font-size:18px; color: #271203;}
+    .card {
+        position: relative; /* wichtig für Overlay */
+        display: inline-block;
+        }
+
+    video#preview{
+      width:50vw;
+      max-width:900px;
+      background:#000;
+      display:block;
+      margin:0 auto;
+      transform: scaleX(-1); /* Spiegeln */
+      position: relative; /* wichtig, damit z-index des Buttons greift */
+    z-index: 1;         /* Video unter Button */
+    }
+    .controls{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      flex-wrap:wrap;
+      margin-top:12px;
+      justify-content:center;
+    }
+    button.primary {
+        position: absolute;
+        bottom: 80px;       /* Abstand vom unteren Rand des Videos */
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;        /* über Video */
+        border:0;
+        border-radius:12px;
+        padding:12px 18px;
+        font-size:16px;
+        cursor:pointer;
+        box-shadow:0 2px 8px rgba(0,0,0,.08);
+        font-family: Georgia, "Times New Roman", serif;
+        background:#9fb2cd;
+        color:#fff;
+    }
+
+    .status{font-size:14px;color:#445;opacity:.85}
+    #timer{
+      font-size:20px;
+      font-weight:bold;
+      margin-top:8px;
+      text-align:center;
+    }
+    #gallery{
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(22%,1fr));
+      gap:16px;
+      margin-top:20px;
+      width:100%;
+      max-width:1400px;
+      background:none; /* Kein Hintergrund */
+    }
+    .thumb video{width:100%;border-radius:8px}
+
+    #countdownOverlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 120px;
+        font-weight: bold;
+        color: rgb(255, 0, 115);
+        text-shadow: 0 0 12px rgba(0,0,0,0.8);
+        display: none; /* Standardmäßig versteckt */
+        pointer-events: none;
+        z-index: 10;
+        }
+
+  </style>
+</head>
+
+
+<body>
+    <h1>Süße Grüße</h1>
+  <p class="subtitle">
+    Erzähle in 30 Sekunden, warum Suse und Heiko so ein tolles Paar sind, <br>
+    was eure Lieblingserinnerung mit den beiden ist oder sendet einfach ein paar süße digitale Grüße. <br>
+    Weiter unten findest du die Galerie mit den bisherigen Beiträgen.
+  </p>
+
+  <div id="countdownOverlay">3</div>
+
+  <div class="card">
+    <video id="preview" autoplay muted playsinline></video>
+    <div id="timer">30</div>
+    <!-- Aufnahme Button über dem Video -->
+    <button id="recordBtn" class="primary record-overlay">🎥 Aufnahme starten</button>
+
+    <div class="controls">
+      <span class="status" id="status">Bereit</span>
+    </div>
+    <progress id="uploadProgress" value="0" max="100" style="width:100%; height:16px; display:none; margin-top:8px; accent-color:pink;"></progress>
+
+  </div>
+
+  <h2 style="margin:20px 0 8px 0;font-size:60px;text-align:center; color: #496677;">Galerie</h2>
+  <div id="gallery"></div>
+
+
+
+
+  
+  <!-- Firebase & App-Logik -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-analytics.js";
+    import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot }
+      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL }
+      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
+    import { getAuth, signInAnonymously }
+      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+
+   // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+    const firebaseConfig = {
+    apiKey: "AIzaSyAQjnnhRVagSdqNoTFGLO_JlASctI8_nhg",
+    authDomain: "silberhochzeit-b7bd7.firebaseapp.com",
+    projectId: "silberhochzeit-b7bd7",
+    storageBucket: "silberhochzeit-b7bd7.firebasestorage.app",
+    messagingSenderId: "908087909874",
+    appId: "1:908087909874:web:49d5af7c5ffa0dac569f6b",
+    measurementId: "G-0KBYKQPDYZ"
+    };
+
+    // Init Firebase services
+    const app = initializeApp(firebaseConfig);
+    getAnalytics(app);
+    const auth = getAuth(app);
+    signInAnonymously(auth).catch(console.error);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    // DOM Elements
+    const preview = document.getElementById("preview");
+    const recordBtn = document.getElementById("recordBtn");
+    const statusEl = document.getElementById("status");
+    const timerEl = document.getElementById("timer");
+    const gallery = document.getElementById("gallery");
+
+    // Globals
+    let stream;
+    let mediaRecorder;
+    let recordedChunks = [];
+    let lastBlob;
+    let isRecording = false;
+    let countdownInterval;
+    const maxMs = 30000; // 30 Sekunden
+
+    async function initWebcam(){
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        preview.srcObject = stream;
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = e => { if (e.data.size) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = async ()=>{
+          lastBlob = new Blob(recordedChunks, { type: "video/webm" });
+          recordedChunks = [];
+          statusEl.textContent = `Lade hoch…`;
+
+            
+
+          try{
+            const uid = auth.currentUser?.uid || "anon";
+            const ts = Date.now();
+            const fname = `video_${uid}_${ts}.webm`;
+            const ref = storageRef(storage, `videos/${fname}`);
+
+            await uploadBytes(ref, lastBlob, { contentType: lastBlob.type });
+            const url = await getDownloadURL(ref);
+
+            await addDoc(collection(db, "videos"), {
+              url, filename: fname, size: lastBlob.size, owner: uid, createdAt: serverTimestamp()
+            });
+
+            statusEl.textContent = "Upload fertig ✅";
+          }catch(err){
+            statusEl.textContent = "Upload-Fehler: " + err.message;
+          }
+        };
+      }catch(err){
+        statusEl.textContent = "Webcam-Fehler: " + err.message;
+      }
+    }
+
+    recordBtn.addEventListener("click", ()=>{
+      if (!isRecording){
+        // Countdown starten
+        let countdown = 3;
+        const overlay = document.getElementById("countdownOverlay");
+        overlay.style.display = "block";
+        overlay.textContent = countdown;
+        const countdownInterval = setInterval(()=>{
+        countdown--;
+        if (countdown > 0) {
+        overlay.textContent = countdown;
+         } else {
+        clearInterval(countdownInterval);
+        overlay.style.display = "none";
+
+
+        // Aufnahme starten
+        lastBlob = null;
+        mediaRecorder.start();
+        isRecording = true;
+        recordBtn.textContent = "⏹ Aufnahme stoppen";
+        statusEl.textContent = "Nimmt auf…";
+        startTimer();
+        setTimeout(()=> stopRecording(), maxMs);
+      }
+    }, 1000);
+  } else {
+    stopRecording();
+  }
+});
+
+    function stopRecording(){
+      if (!isRecording) return;
+      mediaRecorder.stop();
+      isRecording = false;
+      recordBtn.textContent = "🎥 Aufnahme starten";
+      clearInterval(countdownInterval);
+      timerEl.textContent = "30";
+    }
+
+    function startTimer(){
+      let timeLeft = 30;
+      timerEl.textContent = timeLeft;
+      countdownInterval = setInterval(()=>{
+        timeLeft--;
+        timerEl.textContent = timeLeft;
+        if (timeLeft <= 0){
+          clearInterval(countdownInterval);
+        }
+      }, 1000);
+    }
+
+    // Gallery live aus Firestore
+    const q = query(collection(db, "videos"), orderBy("createdAt", "desc"));
+    onSnapshot(q, (snap)=>{
+      gallery.innerHTML = "";
+      snap.forEach(doc=>{
+        const d = doc.data();
+        if (d.url){
+          const wrap = document.createElement("div");
+          wrap.className = "thumb";
+          const v = document.createElement("video");
+          v.src = d.url;
+          v.controls = true;
+          wrap.appendChild(v);
+          gallery.appendChild(wrap);
+        }
+      });
+    });
+
+    initWebcam();
+  </script>
+</body>
+</html>
