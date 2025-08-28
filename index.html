@@ -170,7 +170,7 @@
     let lastBlob;
     let isRecording = false;
     let countdownInterval;
-    const maxMs = 30000; // 30 Sekunden
+    const maxMs = 60000; // 30 Sekunden
 
     async function initWebcam(){
       try{
@@ -250,7 +250,7 @@
     }
 
     function startTimer(){
-      let timeLeft = 30;
+      let timeLeft = 60;
       timerEl.textContent = timeLeft;
       countdownInterval = setInterval(()=>{
         timeLeft--;
